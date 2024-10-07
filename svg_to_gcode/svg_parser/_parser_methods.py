@@ -5,7 +5,8 @@ from copy import deepcopy
 from svg_to_gcode.svg_parser import Path, Transformation
 from svg_to_gcode.geometry import Curve
 
-NAMESPACES = {'svg': 'http://www.w3.org/2000/svg'}
+NAMESPACES = {'svg': 'http://www.w3.org/2000/svg',
+              'xlink': 'http://www.w3.org/1999/xlink'}
 
 
 def _has_style(element: ElementTree.Element, key: str, value: str) -> bool:
@@ -17,7 +18,7 @@ def _has_style(element: ElementTree.Element, key: str, value: str) -> bool:
 
 # Todo deal with viewBoxes
 def parse_root(root: ElementTree.Element, transform_origin=True, canvas_height=None, draw_hidden=False,
-               visible_root=True, root_transformation=None) -> List[Curve]:
+               visible_root=True, root_transformation=None, defs=None) -> List[Curve]:
 
     """
     Recursively parse an etree root's children into geometric curves.
@@ -45,15 +46,14 @@ def parse_root(root: ElementTree.Element, transform_origin=True, canvas_height=N
         # display cannot be overridden by inheritance. Just skip the element
         display = _has_style(element, "display", "none")
 
-        if display or element.tag == "{%s}defs" % NAMESPACES["svg"]:
+        if display:
+            continue
+
+        if element.tag == "{%s}defs" % NAMESPACES["svg"]:
+            defs = {def_element.get("id"): def_element for def_element in list(element)}
             continue
 
         transformation = deepcopy(root_transformation) if root_transformation else None
-
-        transform = element.get('transform')
-        if transform:
-            transformation = Transformation() if transformation is None else transformation
-            transformation.add_transform(transform)
 
         # Is the element and it's root not hidden?
         visible = visible_root and not (_has_style(element, "visibility", "hidden")
@@ -63,12 +63,27 @@ def parse_root(root: ElementTree.Element, transform_origin=True, canvas_height=N
 
         # If the current element is opaque and visible, draw it
         if draw_hidden or visible:
+            use_translate = None
+            if element.tag == "{%s}use" % NAMESPACES["svg"]:
+                attrib_name = "{%s}href" % NAMESPACES["xlink"]
+                use_translate = "translate(%s, %s)" % (element.attrib["x"], element.attrib["y"])
+                element = defs[element.attrib.get(attrib_name)[1:]]
+
+            transform = element.get('transform')
+            if transform:
+                transformation = Transformation() if transformation is None else transformation
+                transformation.add_transform(transform)
+
+            if use_translate:
+                transformation = Transformation() if transformation is None else transformation
+                transformation.add_transform(use_translate)
+
             if element.tag == "{%s}path" % NAMESPACES["svg"]:
                 path = Path(element.attrib['d'], canvas_height, transform_origin, transformation)
                 curves.extend(path.curves)
 
         # Continue the recursion
-        curves.extend(parse_root(element, transform_origin, canvas_height, draw_hidden, visible, transformation))
+        curves.extend(parse_root(element, transform_origin, canvas_height, draw_hidden, visible, transformation, defs))
 
     # ToDo implement shapes class
     return curves
