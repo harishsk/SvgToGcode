@@ -94,7 +94,7 @@ class Transformation:
 
     def add_rotation(self, angle: float, x:float=0.0, y:float=0.0):
         if x != 0.0 or y != 0.0:
-            self.add_translation(-x, -y)
+            self.add_translation(x, y)
 
         self.transformation_record.append(("rotate", [angle]))
 
@@ -106,10 +106,11 @@ class Transformation:
             [0,               0,                0, 1]
         ])
 
-        if x != 0.0 or y != 0.0:
-            self.add_translation(x, y)
-
         self.translation_matrix *= rotation_matrix
+
+        if x != 0.0 or y != 0.0:
+            self.add_translation(-x, -y)
+
 
     def add_skew_x(self, angle):
         self.transformation_record.append(("skewX", [angle]))

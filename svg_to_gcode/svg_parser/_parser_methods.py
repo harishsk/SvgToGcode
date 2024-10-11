@@ -63,20 +63,23 @@ def parse_root(root: ElementTree.Element, transform_origin=True, canvas_height=N
 
         # If the current element is opaque and visible, draw it
         if draw_hidden or visible:
-            use_translate = None
             if element.tag == "{%s}use" % NAMESPACES["svg"]:
                 attrib_name = "{%s}href" % NAMESPACES["xlink"]
-                use_translate = "translate(%s, %s)" % (element.attrib["x"], element.attrib["y"])
-                element = defs[element.attrib.get(attrib_name)[1:]]
+                ref_element = defs[element.attrib.get(attrib_name)[1:]]
+                x = float(element.attrib["x"])
+                y = float(element.attrib["y"])
+                del element.attrib[attrib_name]
+                del element.attrib["x"]
+                del element.attrib["y"]
+                element.attrib['transform'] = f"translate({x}, {y})"
+                group = ElementTree.Element("{%s}g" % NAMESPACES["svg"], deepcopy(element.attrib))
+                group.append(ref_element)
+                element = group
 
             transform = element.get('transform')
             if transform:
                 transformation = Transformation() if transformation is None else transformation
                 transformation.add_transform(transform)
-
-            if use_translate:
-                transformation = Transformation() if transformation is None else transformation
-                transformation.add_transform(use_translate)
 
             if element.tag == "{%s}path" % NAMESPACES["svg"]:
                 path = Path(element.attrib['d'], canvas_height, transform_origin, transformation)
